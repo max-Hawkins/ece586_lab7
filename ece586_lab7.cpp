@@ -1,5 +1,7 @@
 #include <iostream>
+#include <fstream>
 #include <string.h>
+#include <math.h>
 
 using namespace std;
 
@@ -7,12 +9,16 @@ using namespace std;
     Memory Operation structure that the simulator will execute.
     Parsed in from the input file.
 Members:
-    Boolean isRead: Whether or not the operation is a read. Else is 'write'
-    Integer memAddress: The numeric memory address to either read or write
+    Character op_type: Memory operation type. 'R' = Read and 'W' = Write
+    Integer mem_address: The numeric memory address to either read or write
 */
 struct memOp{
-    bool isRead;
-    int memAddress;
+    char op_type;
+    int  mem_address;
+    int  mem_block;
+    int  cache_set;
+    int  cache_block_start;
+    bool is_hit;
 };
 
 /*
@@ -46,7 +52,35 @@ public:
 
         cout << endl;
     }
+
+    void calc_mem_addr_layout(){
+        cout << "Calculating memory layout" << endl;
+
+        // Calculate number of address, convert to integer, and print to screen
+        int num_addr_lines = (int)log2(size_main_mem);
+        cout << "Total address lines required = " << num_addr_lines << endl;
+        // Calculate number of offset bits, convert to integer, and print to screen
+        int num_offset_bits = (int)log2(size_line);
+        cout << "Number of bits for offset = " << num_offset_bits << endl;
+        // Calculate number of index bits, convert to integer, and print to screen
+        int num_index_bits = (int)log2(size_cache / size_line / assoc_deg);
+        cout << "Number of bits for index = " << num_index_bits << endl;
+        // Calculate number of tag bits and print to screen
+        int num_tag_bits = num_addr_lines - num_offset_bits - num_index_bits;
+        cout << "Number of bits for tag = " << num_tag_bits << endl;
+        // Calculate cache size required and print to screen
+
+
+    }
 };
+
+void display_ops(memOp ops[], int num_ops){
+    cout << "Displaying ops" << endl;
+    cout << "Table header" << endl;
+    for(int i=0; i < num_ops; i++){
+        cout << ops[i].mem_address << endl;
+    }
+}
 
 int main(int argc, char *argv[]) {
 
@@ -71,12 +105,34 @@ int main(int argc, char *argv[]) {
 
         mem_sim.display();
 
+        //----------------------------
+        // Parse memory operation file
+        //----------------------------
         std::ifstream input_stream;
-        int num_memOps;
+        int num_mem_ops;
         input_stream.open(mem_sim.input_filename);
-        input_stream >> num_memOps;
+        input_stream >> num_mem_ops;
+        memOp operations[num_mem_ops];
+        // Ignore empty line in input file
+        string s;
+        getline(input_stream,  s);
+        char op_char;
+        int mem_loc;
+        // Parse input memory operations into operations array
+        for(int i=0; i<num_mem_ops; i++){
+            input_stream >> operations[i].op_type;
+            input_stream >> operations[i].mem_address;
+            // cout << "Char: " << op_char << "   Loc: " << mem_loc << endl;
+            // operations[i].op_type     = op_char;
+            // operations[i].mem_address = mem_loc;
+        }
 
-        cout << "Num Memops: " << num_memOps;
+        mem_sim.calc_mem_addr_layout();
+
+        // TODO: Execute operations
+
+        // Print table of memory operations and associated information
+        display_ops(operations, num_mem_ops);
 
         // Check if user wants to run another memory simulator
         cout << "Continue? (y = yes, n = no): ";
