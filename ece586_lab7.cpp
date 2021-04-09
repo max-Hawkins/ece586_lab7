@@ -18,7 +18,7 @@ struct memOp{
     int  mem_block;
     int  cache_set;
     int  cache_block_start;
-    bool is_hit;
+    string result;
 };
 
 /*
@@ -54,8 +54,6 @@ public:
     }
 
     void calc_mem_addr_layout(){
-        cout << "Calculating memory layout" << endl;
-
         // Calculate number of address, convert to integer, and print to screen
         int num_addr_lines = (int)log2(size_main_mem);
         cout << "Total address lines required = " << num_addr_lines << endl;
@@ -69,16 +67,24 @@ public:
         int num_tag_bits = num_addr_lines - num_offset_bits - num_index_bits;
         cout << "Number of bits for tag = " << num_tag_bits << endl;
         // Calculate cache size required and print to screen
-
-
+        // num_cache_blks * (1+1(dirty and valid bits) + num_tag_bits + 8 * block_size) / 8
+        int size_total_cache = (int)(size_cache / size_line * (1 + 1 + num_tag_bits) / 8 + size_cache);
+        cout << "Total cache size required = " << size_total_cache << " bytes" << endl;
     }
 };
 
-void display_ops(memOp ops[], int num_ops){
+void display_ops(memOp ops[], int num_ops, int assoc_deg){
+    // String variable to store each memory addresses potential cache memory blocks
+    string cache_blocks = "";
     cout << "Displaying ops" << endl;
-    cout << "Table header" << endl;
+    cout << "\n\nmain memory address\tmm blk #\tcm set #\tcm blk #\thit/miss" << endl;
+    cout << "-----------------------------------------------------------------------------------" << endl;
     for(int i=0; i < num_ops; i++){
-        cout << ops[i].mem_address << endl;
+        cache_blocks = to_string(ops[i].cache_block_start);
+        for(int block=1; block < assoc_deg; block++){
+            cache_blocks.append(" or " + to_string(ops[i].cache_set + block));
+        }
+        printf("%8d %20d %15d %17s %14s\n", ops[i].mem_address, ops[i].mem_block, ops[i].cache_set, cache_blocks.c_str(), ops[i].result.c_str());
     }
 }
 
@@ -122,9 +128,12 @@ int main(int argc, char *argv[]) {
         for(int i=0; i<num_mem_ops; i++){
             input_stream >> operations[i].op_type;
             input_stream >> operations[i].mem_address;
-            // cout << "Char: " << op_char << "   Loc: " << mem_loc << endl;
-            // operations[i].op_type     = op_char;
-            // operations[i].mem_address = mem_loc;
+
+
+            operations[i].mem_block = floor(operations[i].mem_address / mem_sim.size_line);
+            operations[i].cache_set = operations[i].mem_block % (mem_sim.size_cache / mem_sim.size_line / mem_sim.assoc_deg);
+            operations[i].cache_block_start = operations[i].cache_set * mem_sim.assoc_deg;
+            operations[i].result = "TBD";
         }
 
         mem_sim.calc_mem_addr_layout();
@@ -132,7 +141,7 @@ int main(int argc, char *argv[]) {
         // TODO: Execute operations
 
         // Print table of memory operations and associated information
-        display_ops(operations, num_mem_ops);
+        display_ops(operations, num_mem_ops, mem_sim.assoc_deg);
 
         // Check if user wants to run another memory simulator
         cout << "Continue? (y = yes, n = no): ";
