@@ -88,10 +88,49 @@ public:
         cout << "Total cache size required = " << size_total_cache << " bytes" << endl;
     }
 
-    void exec_ops(memOp ops[], int num_ops){
+    void exec_ops(memOp ops[], int num_ops, cacheBlock cache_blocks[], int num_cache_blocks){
+        int cache_block_to_edit;
+        int cache_block_idx;
         cout << "Executing operations" << endl;
-
+        // Iterate through all memory operations
         for(int i=0; i < num_ops; i++){
+            printf("Mem op: %d, address: %d,  tag: %s\n", i, ops[i].mem_address, ops[i].tag.c_str());
+
+            // Initialize the found cache block index value to an error value so that default is not found
+            cache_block_to_edit = -1;
+            // Search through memory block's associated cache blocks in its cache set
+            for(int cache_block_offset=0; cache_block_offset < assoc_deg; cache_block_offset++){
+                // Add cache set offset to global cache offset
+                cache_block_idx = ops[i].cache_block_start + cache_block_offset;
+                printf("Cache Block: %d,  Cache Tag: %s\n", cache_block_idx, cache_blocks[cache_block_idx].tag.c_str());
+
+                // If the main memory address tag and cache tag match
+                if(ops[i].tag == cache_blocks[cache_block_idx].tag){
+                    printf("Tag match found!\n");
+                    cache_block_to_edit = cache_block_idx; // Set current index to found index
+                    ops[i].result = "hit"; // Set operation result as hit
+                    break;
+                }
+                // If the cache tag has not yet written been written to this simulation run (found "x")
+                else if(cache_blocks[cache_block_idx].tag.at(0) == 'x'){
+                    printf("Empty tag found!\n");
+                    cache_block_to_edit = cache_block_idx; // Set current index to found index
+                    break;
+                }
+            }
+
+            // If the desired main memory tag was not found in cache and no accessible cache
+            // blocks were free, find LRU or FIFO block to overwrite. => Miss
+            if(cache_block_to_edit < 0){
+                ops[i].result = "miss";
+
+                // TODO: LRU
+                // TODO: FIFO
+            }
+            // Otherwise, if 
+            else{
+
+            }
             
         }
     }
@@ -107,16 +146,33 @@ void display_ops(memOp ops[], int num_ops, int assoc_deg){
         for(int block=1; block < assoc_deg; block++){
             cache_blocks.append(" or " + to_string(ops[i].cache_set + block));
         }
-        printf("%8d %20d %15d %17s %14s\n", ops[i].mem_address, ops[i].mem_block, ops[i].cache_set, cache_blocks.c_str(), ops[i].result.c_str());
+        printf("%8d %20d %15d %17s %14s\t\t%8s\n", ops[i].mem_address, ops[i].mem_block, ops[i].cache_set, cache_blocks.c_str(), ops[i].result.c_str(), ops[i].tag.c_str());
     }
 
     
 }
 
-string parse_tag(int mem_block, int num_address_lines, int num_tag_bits){
+string parse_tag(int mem_address, int num_address_lines, int num_tag_bits){
+    int bit_val;
     string tag_string = "";
+    //cout << "\nmem block: " << mem_address << endl;
+    //cout << "Num shift: " << num_address_lines - num_tag_bits << endl;
 
-    return "420";
+    mem_address = mem_address >> (num_address_lines - num_tag_bits);
+    //printf("Tag value: %d\n", mem_address & 0x3);
+    for(int bit=1; bit <= num_tag_bits; bit++){
+        if((mem_address & 0x1) == 1){
+            //printf("1 digit!");
+            tag_string.insert(0, "1");
+        }else{
+            tag_string.insert(0, "0");
+        }
+        //printf("Bit: %d, value: %d\n", bit, mem_address & 0x3);
+        mem_address = mem_address >> 1;
+    }
+    //printf("Tag string::: %s\n", tag_string.c_str());
+
+    return tag_string;
 }
 
 void display_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_bits){
@@ -134,7 +190,7 @@ void init_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_bit
     for(int i=0; i < num_cache_blocks; i++){
         cache_blocks[i].dirty = false;
         cache_blocks[i].valid = false;
-        cache_blocks[i].tag   = "xxxt";
+        cache_blocks[i].tag   = string(num_tag_bits, 'x');
         cache_blocks[i].data  = -1;
     }
 }
@@ -145,18 +201,22 @@ void calc_hit_rates(memOp ops[], int num_ops){
 
     for(int i=0; i < num_ops; i++){
         if(blocks_seen.find(ops[i].mem_block) != blocks_seen.end()){
-            printf("Block %d found.\n", ops[i].mem_block);
             num_hits++;
         } 
         else{
-            printf("Block %d not found!\n", ops[i].mem_block);
             blocks_seen.insert(ops[i].mem_block);
         }
     }
 
-    // TODO Calculate highest and actual hit rate!!!
-    printf("\nHighest possible hit rate = \n");
-    printf("Actual hit rate = \n");
+    printf("\nHighest possible hit rate = %d/%d = %2.1f%%\n", num_hits, num_ops, (float)num_hits/num_ops*100.0);
+
+    num_hits = 0;
+
+    for(int i=0; i < num_ops; i++){
+        if(ops[i].result == "hit")
+            num_hits++;
+    }
+    printf("Actual hit rate = %d/%d = %2.1f%%\n", num_hits, num_ops, (float)num_hits/num_ops*100.0);
 }
 
 int main(int argc, char *argv[]) {
@@ -180,11 +240,15 @@ int main(int argc, char *argv[]) {
         cout << "Enter the name of the input file containing the list of memory references generated by the CPU:";
         cin >> mem_sim.input_filename;
 
+        
+
+        mem_sim.display();
+
+        mem_sim.calc_mem_addr_layout();
+
         int num_cache_blocks = mem_sim.size_cache / mem_sim.size_line;
         cacheBlock cache_blocks[num_cache_blocks];
         init_cache(cache_blocks, num_cache_blocks, mem_sim.num_tag_bits);
-
-        mem_sim.display();
 
         //----------------------------
         // Parse memory operation file
@@ -210,18 +274,18 @@ int main(int argc, char *argv[]) {
             operations[i].cache_set = operations[i].mem_block % (mem_sim.size_cache / mem_sim.size_line / mem_sim.assoc_deg);
             operations[i].cache_block_start = operations[i].cache_set * mem_sim.assoc_deg;
             operations[i].result = "TBD";
-            operations[i].tag = parse_tag(operations[i].mem_block, num_addr_lines, mem_sim.num_tag_bits);
+            operations[i].tag = parse_tag(operations[i].mem_address, num_addr_lines, mem_sim.num_tag_bits);
         }
 
-        mem_sim.calc_mem_addr_layout();
+        
 
         // TODO: Execute operations
-        mem_sim.exec_ops(operations, num_mem_ops);
-
-        calc_hit_rates(operations, num_mem_ops);
+        mem_sim.exec_ops(operations, num_mem_ops, cache_blocks, num_cache_blocks);
 
         // Print table of memory operations and associated information
         display_ops(operations, num_mem_ops, mem_sim.assoc_deg);
+
+        calc_hit_rates(operations, num_mem_ops);
 
         // Display final cache status
         display_cache(cache_blocks, num_cache_blocks, mem_sim.num_tag_bits);
