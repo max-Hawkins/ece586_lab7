@@ -1,3 +1,8 @@
+/*  Max Hawkins
+    CWID: 11789594
+    ECE-487: Lab 7
+    April 13th, 2021
+*/
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -89,15 +94,15 @@ public:
     }
 
     void exec_ops(memOp ops[], int num_ops, cacheBlock cache_blocks[], int num_cache_blocks){
-        int cache_block_to_edit;
+        bool tag_found;
         int cache_block_idx;
         cout << "Executing operations" << endl;
         // Iterate through all memory operations
         for(int i=0; i < num_ops; i++){
-            printf("Mem op: %d, address: %d,  tag: %s\n", i, ops[i].mem_address, ops[i].tag.c_str());
+            printf("\nMem op: %d, address: %d,  tag: %s\n", i, ops[i].mem_address, ops[i].tag.c_str());
 
-            // Initialize the found cache block index value to an error value so that default is not found
-            cache_block_to_edit = -1;
+            // Initialize the found status to false so that default is not found
+            tag_found = false;
             // Search through memory block's associated cache blocks in its cache set
             for(int cache_block_offset=0; cache_block_offset < assoc_deg; cache_block_offset++){
                 // Add cache set offset to global cache offset
@@ -107,31 +112,80 @@ public:
                 // If the main memory address tag and cache tag match
                 if(ops[i].tag == cache_blocks[cache_block_idx].tag){
                     printf("Tag match found!\n");
-                    cache_block_to_edit = cache_block_idx; // Set current index to found index
+                    tag_found = true; // Set found flag to true
                     ops[i].result = "hit"; // Set operation result as hit
+
+                    // If the operation was a write
+                    if(ops[i].op_type == 'W' || ops[i].op_type == 'w'){
+                        printf("Writing dirty bit!\n");
+                        // Set cache block dirty flag to true
+                        cache_blocks[cache_block_idx].dirty = true;
+                    }
                     break;
                 }
                 // If the cache tag has not yet written been written to this simulation run (found "x")
-                else if(cache_blocks[cache_block_idx].tag.at(0) == 'x'){
-                    printf("Empty tag found!\n");
-                    cache_block_to_edit = cache_block_idx; // Set current index to found index
-                    break;
+                // else if(cache_blocks[cache_block_idx].tag.at(0) == 'x'){
+                //     printf("Empty tag found!\n");
+                //     cache_block_to_edit = cache_block_idx; // Set current index to found index
+                //     break;
+                // }
+            }
+
+            // If the desired main memory tag was not found in cache
+            // Find LRU or FIFO block to overwrite. => Miss
+            if(!tag_found){
+                int cache_block_to_edit = -1;
+                ops[i].result = "miss"; // Set operation result to miss
+
+                // Check to see if the cache set has a block that has not
+                // been written to this simulator execution run.
+                // Did not want to include this in above loop just incase there
+                // could be some edgecase where blocks would not be filled sequentially
+                for(int cache_block_offset=0; cache_block_offset < assoc_deg; cache_block_offset++){
+                    // Add cache set offset to global cache offset
+                    cache_block_idx = ops[i].cache_block_start + cache_block_offset;
+                    // If the cache block is unyet written to, make that block the one to operate on
+                    if(cache_blocks[cache_block_idx].tag.at(0) == 'x'){
+                        cache_block_to_edit = cache_block_idx;
+                        printf("Empty cache block found: %d", cache_block_idx);
+                        break;
+                    }
                 }
-            }
 
-            // If the desired main memory tag was not found in cache and no accessible cache
-            // blocks were free, find LRU or FIFO block to overwrite. => Miss
-            if(cache_block_to_edit < 0){
-                ops[i].result = "miss";
+                // If no 'empty' cache blocks were found, use replacement policy as given by user
+                if(cache_block_to_edit < 0){
+                    // If using least recently used replacement policy
+                    if(replace_policy == 'L' || replace_policy == 'l'){
+                        cache_block_to_edit = ops[i].cache_block_start;
+                    }
+                    // If using first-in-first-out replacement policy
+                    else if(replace_policy == 'F' || replace_policy == 'f'){
+                        cache_block_to_edit = ops[i].cache_block_start;
+                    }
+                    // If invalid replacement policy - should NOT happen since in 487
+                    else{
+                        printf("---Invalid replacement policy!---\n");
+                    }
+                }
 
-                // TODO: LRU
-                // TODO: FIFO
-            }
-            // Otherwise, if 
-            else{
+                // Execute memory operation on given block (empty or otherwise)
 
-            }
-            
+                // Set cache block to valid
+                cache_blocks[cache_block_to_edit].valid = true; 
+                // Set cache block tag to main memory address tag
+                cache_blocks[cache_block_to_edit].tag   = ops[i].tag; 
+                // Set cache block data to main memory block number
+                cache_blocks[cache_block_to_edit].data  = ops[i].mem_block; 
+                // If operation is a write
+                if(ops[i].op_type == 'W' || ops[i].op_type == 'w'){
+                    printf("Writing dirty bit!\n");
+                    // Set cache block dirty flag to true
+                    cache_blocks[cache_block_idx].dirty = true;
+                }// Else dirty bit is false (read operation)
+                else{
+                    cache_blocks[cache_block_to_edit].dirty = false;
+                }
+            }            
         }
     }
 };
@@ -179,9 +233,9 @@ void display_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_
     string data_string;
     cout << "\n\nFinal \"status\" of the cache:" << endl;
     cout << "Cache blk #\tdirty bit\tvalid bit\ttag\t\tData" << endl;
-    cout << "--------------------------------------------------------------------------------------" << endl;
+    cout << "------------------------------------------------------------------------------" << endl;
     for(int i=0; i < num_cache_blocks; i++){
-        data_string = (cache_blocks[i].data < 0) ? "xxx" : to_string(cache_blocks[i].data);
+        data_string = (cache_blocks[i].data < 0) ? "xxx" : "mm blk # " + to_string(cache_blocks[i].data);
         printf("%7d %14d %15d %12s %18s\n", i, cache_blocks[i].dirty, cache_blocks[i].valid, cache_blocks[i].tag.c_str(), data_string.c_str());
     }
 }
@@ -208,7 +262,7 @@ void calc_hit_rates(memOp ops[], int num_ops){
         }
     }
 
-    printf("\nHighest possible hit rate = %d/%d = %2.1f%%\n", num_hits, num_ops, (float)num_hits/num_ops*100.0);
+    printf("\nHighest possible hit rate = %d/%d = %2.0f%%\n", num_hits, num_ops, (float)num_hits/num_ops*100.0);
 
     num_hits = 0;
 
@@ -216,7 +270,7 @@ void calc_hit_rates(memOp ops[], int num_ops){
         if(ops[i].result == "hit")
             num_hits++;
     }
-    printf("Actual hit rate = %d/%d = %2.1f%%\n", num_hits, num_ops, (float)num_hits/num_ops*100.0);
+    printf("Actual hit rate = %d/%d = %2.0f%%\n", num_hits, num_ops, (float)num_hits/num_ops*100.0);
 }
 
 int main(int argc, char *argv[]) {
