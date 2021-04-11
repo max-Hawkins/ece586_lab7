@@ -3,6 +3,7 @@
     ECE-487: Lab 7
     April 13th, 2021
 */
+// Include various libraries for use in program
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -18,9 +19,15 @@ const string UNKOWN_STR = "xxx";
 /* 
     Memory Operation structure that the simulator will execute.
     Parsed in from the input file.
+
 Members:
     Character op_type: Memory operation type. 'R' = Read and 'W' = Write
-    Integer mem_address: The numeric memory address to either read or write
+    Integer mem_address: The numeric main memory address to either read or write
+    Integer mem_block: The numeric main memory block
+    String tag: The string representation of the memory address tag
+    Integer cache_set: The cache set the main memory block is associated with
+    Integer cache_block_start: The starting block cache of the cache set
+    String result: The result of the memory operation "hit" or "miss"
 */
 struct memOp{
     char op_type;
@@ -32,6 +39,16 @@ struct memOp{
     string result;
 };
 
+/*
+    Cache block structure for use in keeping track of cache status
+
+Members:
+    Boolean valid: Whether the cache block contains valid data
+    Boolean dirty: Whether the cache block data is dirty
+    String tag: The tag of the block's data
+    Int data: The main memory block number of the cache data
+    Int cache_set: The cache set associated with the cache block
+*/
 struct cacheBlock{
     bool valid;
     bool dirty;
@@ -46,8 +63,16 @@ struct cacheBlock{
 Used to store all necessary information for the simulation
 of a memory hierarchy and memory operations.
 
-
-
+Members:
+    Integer size_main_mem: The main memory size in bytes
+    Integer size_cache: The cache memory size in bytes
+    Integer size_line: The size of a line/block of memory
+    Integer assoc_deg: The degree of association of the cache
+    Character replace_policy: The system's replace policy
+        "L" for least-recently-used or
+        "F" for first-in-first-out
+    String input_filename: The filename of the memory instructions file
+    Integer num_tag_bits: The number of tag bits in the memory addresses
 */
 class MemorySim{
 public:
@@ -59,19 +84,7 @@ public:
     string input_filename;
     int num_tag_bits;
 
-    MemorySim(){}
-
-    void display(){
-        cout << "\n--- Memory Sim ---" ;
-        cout << "\nMain Mem size: " << size_main_mem;
-        cout << "\nCache size   : " << size_cache;
-        cout << "\nLine size    : " << size_line;
-        cout << "\nDegree of ass: " << assoc_deg;
-        cout << "\nReplace Pol  : " << replace_policy;
-        cout << "\nInput File   : " << input_filename;
-
-        cout << endl;
-    }
+    MemorySim(){} // Default constructor
 
     void calc_mem_addr_layout(){
         cout << "\nSimulator Output:" << endl;
@@ -123,12 +136,6 @@ public:
                     }
                     break;
                 }
-                // If the cache tag has not yet written been written to this simulation run (found "x")
-                // else if(cache_blocks[cache_block_idx].tag.at(0) == 'x'){
-                //     printf("Empty tag found!\n");
-                //     cache_block_to_edit = cache_block_idx; // Set current index to found index
-                //     break;
-                // }
             }
 
             // If the desired main memory tag was not found in cache
@@ -154,13 +161,77 @@ public:
 
                 // If no 'empty' cache blocks were found, use replacement policy as given by user
                 if(cache_block_to_edit < 0){
+                    bool cache_repl_block_found = false;
+                    int cur_search_main_block;
+
                     // If using least recently used replacement policy
                     if(replace_policy == 'L' || replace_policy == 'l'){
-                        cache_block_to_edit = ops[i].cache_block_start;
+                        bool cache_block_age_found;
+                        int cache_blocks_age[assoc_deg];
+                        // Iterate through current cache set blocks
+                        for(int cache_block_offset=0; cache_block_offset < assoc_deg; cache_block_offset++){
+                            // Initialize that the current cache block of interest's age has not been found
+                            cache_block_age_found = false;
+                            // Add cache set offset to global cache offset
+                            cache_block_idx = ops[i].cache_block_start + cache_block_offset;
+
+                            // Iterate backwards through memory operations starting at current operation
+                            for(int search_op=i; search_op > 0; search_op--){
+                                printf("LRU Search op idx: %d", search_op);
+                                // If the historical operated data block and the current cache block
+                                // searched for match
+                                if(ops[search_op].mem_block == cache_blocks[cache_block_idx].data){
+                                    // Set the associated cache block age to the difference in operation index
+                                    // of the current executed operation and the operation the main memory block
+                                    // was last operated on
+                                    cache_blocks_age[cache_block_offset] = i - search_op;
+                                    // Break out of search operation loop
+                                    break;
+                                }
+                                
+                            }
+                        }
+
+                        
+                        int max_age = cache_blocks_age[0]; // Initialize max age to first cache block age
+                        int max_age_cache_offset = 0; // Initialize max age index to 0
+                        // Iterate through cache block ages to find the index (cache set offset)
+                        // of the maximum element of the cache block age
+                        for(int idx=1; idx < assoc_deg; idx++){
+                            if(cache_blocks_age[idx] > max_age){
+                                max_age = cache_blocks_age[idx];
+                                max_age_cache_offset = idx;
+                            }
+                        }
+                        printf("LRU min age cache offset: %d,  age: %d", max_age_cache_offset, max_age);
+
+                        // Set cache block to overwrite to the cache block with index of mad age
+                        cache_block_to_edit = ops[i].cache_block_start + max_age_cache_offset;
                     }
+
                     // If using first-in-first-out replacement policy
                     else if(replace_policy == 'F' || replace_policy == 'f'){
-                        cache_block_to_edit = ops[i].cache_block_start;
+                        // Iterate forwards through memory operations 
+                        for(int search_op=0; search_op < num_ops; search_op++){
+                            printf("FIFO Search op idx: %d", search_op);
+                            // For every search operation in history, see if the main memory
+                            // block is in the cache set of interest
+                            cur_search_main_block = ops[search_op].mem_block;
+                            for(int cache_block_offset=0; cache_block_offset < assoc_deg; cache_block_offset++){
+                                // Add cache set offset to global cache offset
+                                cache_block_idx = ops[i].cache_block_start + cache_block_offset;
+                                // If the cache set contains the historical main memory block operated on of interest
+                                if(cache_blocks[cache_block_idx].data == cur_search_main_block){
+                                    cache_repl_block_found = true;
+                                    cache_block_to_edit = cache_block_idx;
+                                    printf("FIFO cache block found: %d", cache_block_idx);
+                                    break;
+                                }
+                            }
+                            // If a cache block to replace has been found, exit search for loop
+                            if(cache_repl_block_found)
+                                break;
+                        }
                     }
                     // If invalid replacement policy - should NOT happen since in 487
                     else{
@@ -192,18 +263,24 @@ public:
 
 void display_ops(memOp ops[], int num_ops, int assoc_deg){
     // String variable to store each memory addresses potential cache memory blocks
-    string cache_blocks = "";
+    string cache_blocks;
+    // Display memory operation table header
     cout << "\n\nmain memory address\tmm blk #\tcm set #\tcm blk #\thit/miss" << endl;
     cout << "-----------------------------------------------------------------------------------" << endl;
+    // Iterate through memory operations
     for(int i=0; i < num_ops; i++){
+        // Initialize cache blocks display string to the starting cache set block number
         cache_blocks = to_string(ops[i].cache_block_start);
-        for(int block=1; block < assoc_deg; block++){
-            cache_blocks.append(" or " + to_string(ops[i].cache_set + block));
+        // If the degree of association is 2, use 'or' when displaying cache blocks
+        if(assoc_deg == 2){
+            cache_blocks.append(" or " + to_string(ops[i].cache_block_start + assoc_deg - 1));
+        // Else if association degree is greater than 2, use '-' (scales better)
+        }else if(assoc_deg > 2){
+            cache_blocks.append(" - " + to_string(ops[i].cache_block_start + assoc_deg - 1));
         }
-        printf("%8d %20d %15d %17s %14s\t\t%8s\n", ops[i].mem_address, ops[i].mem_block, ops[i].cache_set, cache_blocks.c_str(), ops[i].result.c_str(), ops[i].tag.c_str());
+        // Print formatted display of memory operation information
+        printf("%8d %20d %15d %17s %14s\n", ops[i].mem_address, ops[i].mem_block, ops[i].cache_set, cache_blocks.c_str(), ops[i].result.c_str());
     }
-
-    
 }
 
 string parse_tag(int mem_address, int num_address_lines, int num_tag_bits){
@@ -236,51 +313,62 @@ void display_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_
     cout << "------------------------------------------------------------------------------" << endl;
     for(int i=0; i < num_cache_blocks; i++){
         data_string = (cache_blocks[i].data < 0) ? "xxx" : "mm blk # " + to_string(cache_blocks[i].data);
-        printf("%7d %14d %15d %12s %18s\n", i, cache_blocks[i].dirty, cache_blocks[i].valid, cache_blocks[i].tag.c_str(), data_string.c_str());
+        printf("%7d %14d %15d %12s %16s\n", i, cache_blocks[i].dirty, cache_blocks[i].valid, cache_blocks[i].tag.c_str(), data_string.c_str());
     }
 }
 
 void init_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_bits){
+    // Iterate through the cache blocks
     for(int i=0; i < num_cache_blocks; i++){
+        // Initialize cache dirty and valid statuses to be false
         cache_blocks[i].dirty = false;
         cache_blocks[i].valid = false;
+        // Set cache block tag to be the correct length but filled with 'x's
         cache_blocks[i].tag   = string(num_tag_bits, 'x');
+        // Initialize the cache data block to be an impossible value
         cache_blocks[i].data  = -1;
     }
 }
 
 void calc_hit_rates(memOp ops[], int num_ops){
-    int num_hits = 0;
+    int num_hits = 0; // Initialize the number of hits to 0
+    // Create a set containing the main memory blocks yet operated on
     set<int> blocks_seen;
 
+    // Iterate through memory operations
     for(int i=0; i < num_ops; i++){
+        // If the current main memory block to be operated on has been seen before
         if(blocks_seen.find(ops[i].mem_block) != blocks_seen.end()){
-            num_hits++;
+            num_hits++; // Increment the number of hits
         } 
+        // Else, add the curent main memory block to the seen list
         else{
             blocks_seen.insert(ops[i].mem_block);
         }
     }
-
+    // Calculate and print the optimum hit rate
     printf("\nHighest possible hit rate = %d/%d = %2.0f%%\n", num_hits, num_ops, (float)num_hits/num_ops*100.0);
 
-    num_hits = 0;
-
+    num_hits = 0; // Reset the number of hits for actual calculation
+    // Iterate through the memory operations
     for(int i=0; i < num_ops; i++){
+        // If the operation resulted in a cache hit
         if(ops[i].result == "hit")
-            num_hits++;
+            num_hits++; // Increment the number of hits
     }
+    // Calculate and print the actual cache hit rate
     printf("Actual hit rate = %d/%d = %2.0f%%\n", num_hits, num_ops, (float)num_hits/num_ops*100.0);
 }
 
 int main(int argc, char *argv[]) {
-
+    // Character input to parse for continue operation status
     char cont_input;
-
+    // Infinite operation loop
     while(1){
-
+        // Create memory simulator to later populate with values
         MemorySim mem_sim = MemorySim();
 
+        // Parse all user input regarding the simulator operation
         cout << "Enter the size of main memory in bytes: ";
         cin >> mem_sim.size_main_mem;
         cout << "Enter the size of the cache in bytes: ";
@@ -294,51 +382,56 @@ int main(int argc, char *argv[]) {
         cout << "Enter the name of the input file containing the list of memory references generated by the CPU:";
         cin >> mem_sim.input_filename;
 
-        
-
-        mem_sim.display();
-
+        // Calculate any other necessary parameters about the simulator operation
         mem_sim.calc_mem_addr_layout();
 
+        // Calculate the number of cache blocks
         int num_cache_blocks = mem_sim.size_cache / mem_sim.size_line;
+        // Declare an array of cache blocks representing the system cache
         cacheBlock cache_blocks[num_cache_blocks];
+        // Initialize the system cache to starting values
         init_cache(cache_blocks, num_cache_blocks, mem_sim.num_tag_bits);
 
-        //----------------------------
         // Parse memory operation file
-        //----------------------------
-        std::ifstream input_stream;
-        int num_mem_ops;
-        input_stream.open(mem_sim.input_filename);
-        input_stream >> num_mem_ops;
-        memOp operations[num_mem_ops];
+        std::ifstream input_stream; // Create input file stream
+        int num_mem_ops; // Variable to store number of memory operations
+        input_stream.open(mem_sim.input_filename); // Open memory operations file
+        input_stream >> num_mem_ops; // Get number of memory operations from file
+        memOp operations[num_mem_ops]; // Create array of memory operations
         
+        string s; // Dummy string
+        getline(input_stream, s); // Ignore empty line in input file
 
-        // Ignore empty line in input file
-        string s;
-        getline(input_stream, s);
-        char op_char;
-        int mem_loc;
+        char op_char; // Variable to store temporary memory operation type
+        int mem_loc; // Variable to store temporary memory address
+        // Calculate and store number of address lines
         int num_addr_lines = (int)log2(mem_sim.size_main_mem);
+
         // Parse input memory operations into operations array
         for(int i=0; i<num_mem_ops; i++){
-            input_stream >> operations[i].op_type;
-            input_stream >> operations[i].mem_address;
+            input_stream >> operations[i].op_type; // Get op type from file
+            input_stream >> operations[i].mem_address; // Get memory address from file
+            // Calculate and set memory operation main memory block
             operations[i].mem_block = floor(operations[i].mem_address / mem_sim.size_line);
+            // Calculate and set memory operation cache set
             operations[i].cache_set = operations[i].mem_block % (mem_sim.size_cache / mem_sim.size_line / mem_sim.assoc_deg);
+            // Calculate and set memory operation starting cache block
             operations[i].cache_block_start = operations[i].cache_set * mem_sim.assoc_deg;
-            operations[i].result = "TBD";
+            // Initialize memory operation result to unknown string
+            operations[i].result = UNKOWN_STR;
+            // Set memory operation address tag
             operations[i].tag = parse_tag(operations[i].mem_address, num_addr_lines, mem_sim.num_tag_bits);
         }
 
         
 
-        // TODO: Execute operations
+        // Execute memory operations given the simulator setup and system cache
         mem_sim.exec_ops(operations, num_mem_ops, cache_blocks, num_cache_blocks);
 
         // Print table of memory operations and associated information
         display_ops(operations, num_mem_ops, mem_sim.assoc_deg);
 
+        // Calculate and print the optimum and actual hit rates
         calc_hit_rates(operations, num_mem_ops);
 
         // Display final cache status
@@ -346,11 +439,11 @@ int main(int argc, char *argv[]) {
 
         // Check if user wants to run another memory simulator
         cout << "Continue? (y = yes, n = no): ";
-        cin  >> cont_input;
+        cin  >> cont_input; // Parse user input
         // Only continue if input is 'y'since don't need to error check
         // If the input isn't y, default to ending program
         if(cont_input != 'y')
             return 0; // End program
     }
-    //return 0;
+    return 0; // End program operation
 }
