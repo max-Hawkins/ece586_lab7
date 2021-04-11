@@ -86,6 +86,12 @@ public:
 
     MemorySim(){} // Default constructor
 
+    /**************************************************************************************************************
+    Function name:         calc_mem_addr_layout()
+    Input parameters:      None
+    Return value:          Void - Returns nothing
+    Purpose:               Calculates and displays various memory simulator parameters necessary for operation
+    **************************************************************************************************************/
     void calc_mem_addr_layout(){
         cout << "\nSimulator Output:" << endl;
         // Calculate number of address, convert to integer, and print to screen
@@ -103,16 +109,25 @@ public:
         // Calculate cache size required and print to screen
         // num_cache_blks * (1+1(dirty and valid bits) + num_tag_bits + 8 * block_size) / 8
         int size_total_cache = (int)(size_cache / size_line * (1 + 1 + num_tag_bits) / 8 + size_cache);
-        cout << "Total cache size required = " << size_total_cache << " bytes" << endl;
+        cout << "Total cache size required = " << size_total_cache << " bytes";
     }
 
+    /**************************************************************************************************************
+    Function name:         exec_ops(memOp ops[], int num_ops, cacheBlock cache_blocks[], int num_cache_blocks)
+    Input parameters:      memOp ops[]: The array of memory operations to be executed
+                           integer num_ops: The number of memory operations
+                           cacheBlock cache_blocks[]: The array of cache blocks emulating cache memory
+                           integer num_cache_blocks: The number of cache blocks in the system cache
+    Return value:          Void - Returns nothing
+    Purpose:               Runs the memory operations with the given cache memory and simulator parameters
+    **************************************************************************************************************/
     void exec_ops(memOp ops[], int num_ops, cacheBlock cache_blocks[], int num_cache_blocks){
-        bool tag_found;
-        int cache_block_idx;
-        cout << "Executing operations" << endl;
+        bool tag_found; // Boolean flag of whether or not a tag match was found
+        int cache_block_idx; // Variable to store the current cache block index to be searched
+        //cout << "Executing operations" << endl;
         // Iterate through all memory operations
         for(int i=0; i < num_ops; i++){
-            printf("\nMem op: %d, address: %d,  tag: %s\n", i, ops[i].mem_address, ops[i].tag.c_str());
+            //printf("\nMem op: %d, address: %d,  tag: %s\n", i, ops[i].mem_address, ops[i].tag.c_str());
 
             // Initialize the found status to false so that default is not found
             tag_found = false;
@@ -120,28 +135,28 @@ public:
             for(int cache_block_offset=0; cache_block_offset < assoc_deg; cache_block_offset++){
                 // Add cache set offset to global cache offset
                 cache_block_idx = ops[i].cache_block_start + cache_block_offset;
-                printf("Cache Block: %d,  Cache Tag: %s\n", cache_block_idx, cache_blocks[cache_block_idx].tag.c_str());
+                //printf("Cache Block: %d,  Cache Tag: %s\n", cache_block_idx, cache_blocks[cache_block_idx].tag.c_str());
 
                 // If the main memory address tag and cache tag match
                 if(ops[i].tag == cache_blocks[cache_block_idx].tag){
-                    printf("Tag match found!\n");
+                    //printf("Tag match found!\n");
                     tag_found = true; // Set found flag to true
                     ops[i].result = "hit"; // Set operation result as hit
 
                     // If the operation was a write
                     if(ops[i].op_type == 'W' || ops[i].op_type == 'w'){
-                        printf("Writing dirty bit!\n");
+                        //printf("Writing dirty bit!\n");
                         // Set cache block dirty flag to true
                         cache_blocks[cache_block_idx].dirty = true;
                     }
-                    break;
+                    break; // Break out of cache block search loop
                 }
             }
 
             // If the desired main memory tag was not found in cache
             // Find LRU or FIFO block to overwrite. => Miss
             if(!tag_found){
-                int cache_block_to_edit = -1;
+                int cache_block_to_edit = -1; // Initialize cache block to edit to impossible value
                 ops[i].result = "miss"; // Set operation result to miss
 
                 // Check to see if the cache set has a block that has not
@@ -154,20 +169,20 @@ public:
                     // If the cache block is unyet written to, make that block the one to operate on
                     if(cache_blocks[cache_block_idx].tag.at(0) == 'x'){
                         cache_block_to_edit = cache_block_idx;
-                        printf("Empty cache block found: %d", cache_block_idx);
-                        break;
+                        //printf("Empty cache block found: %d", cache_block_idx);
+                        break; // Break out of cache block search loop
                     }
                 }
 
                 // If no 'empty' cache blocks were found, use replacement policy as given by user
                 if(cache_block_to_edit < 0){
-                    bool cache_repl_block_found = false;
-                    int cur_search_main_block;
+                    bool cache_repl_block_found = false; // Initialize found status to false
+                    int cur_search_main_block; // Store current main memory block searched for
 
                     // If using least recently used replacement policy
                     if(replace_policy == 'L' || replace_policy == 'l'){
-                        bool cache_block_age_found;
-                        int cache_blocks_age[assoc_deg];
+                        bool cache_block_age_found; // Variable to store whether or not the cache block age found
+                        int cache_blocks_age[assoc_deg]; // Array of cache set blocks ages
                         // Iterate through current cache set blocks
                         for(int cache_block_offset=0; cache_block_offset < assoc_deg; cache_block_offset++){
                             // Initialize that the current cache block of interest's age has not been found
@@ -177,7 +192,7 @@ public:
 
                             // Iterate backwards through memory operations starting at current operation
                             for(int search_op=i; search_op > 0; search_op--){
-                                printf("LRU Search op idx: %d", search_op);
+                                //printf("LRU Search op idx: %d", search_op);
                                 // If the historical operated data block and the current cache block
                                 // searched for match
                                 if(ops[search_op].mem_block == cache_blocks[cache_block_idx].data){
@@ -190,20 +205,22 @@ public:
                                 }
                                 
                             }
-                        }
-
+                        } // End cache block search loop
                         
                         int max_age = cache_blocks_age[0]; // Initialize max age to first cache block age
                         int max_age_cache_offset = 0; // Initialize max age index to 0
                         // Iterate through cache block ages to find the index (cache set offset)
                         // of the maximum element of the cache block age
                         for(int idx=1; idx < assoc_deg; idx++){
+                            // If the current block's age is greater than max age
                             if(cache_blocks_age[idx] > max_age){
+                                // Set max age to current block's age
                                 max_age = cache_blocks_age[idx];
+                                // Set max age index to current index
                                 max_age_cache_offset = idx;
                             }
                         }
-                        printf("LRU min age cache offset: %d,  age: %d", max_age_cache_offset, max_age);
+                        //printf("LRU min age cache offset: %d,  age: %d", max_age_cache_offset, max_age);
 
                         // Set cache block to overwrite to the cache block with index of mad age
                         cache_block_to_edit = ops[i].cache_block_start + max_age_cache_offset;
@@ -213,7 +230,7 @@ public:
                     else if(replace_policy == 'F' || replace_policy == 'f'){
                         // Iterate forwards through memory operations 
                         for(int search_op=0; search_op < num_ops; search_op++){
-                            printf("FIFO Search op idx: %d", search_op);
+                            //printf("FIFO Search op idx: %d", search_op);
                             // For every search operation in history, see if the main memory
                             // block is in the cache set of interest
                             cur_search_main_block = ops[search_op].mem_block;
@@ -222,10 +239,10 @@ public:
                                 cache_block_idx = ops[i].cache_block_start + cache_block_offset;
                                 // If the cache set contains the historical main memory block operated on of interest
                                 if(cache_blocks[cache_block_idx].data == cur_search_main_block){
-                                    cache_repl_block_found = true;
-                                    cache_block_to_edit = cache_block_idx;
-                                    printf("FIFO cache block found: %d", cache_block_idx);
-                                    break;
+                                    cache_repl_block_found = true; // Set replace block found
+                                    cache_block_to_edit = cache_block_idx; // Set replace index to current index
+                                    //printf("FIFO cache block found: %d", cache_block_idx);
+                                    break; // Break out cache block search
                                 }
                             }
                             // If a cache block to replace has been found, exit search for loop
@@ -249,7 +266,7 @@ public:
                 cache_blocks[cache_block_to_edit].data  = ops[i].mem_block; 
                 // If operation is a write
                 if(ops[i].op_type == 'W' || ops[i].op_type == 'w'){
-                    printf("Writing dirty bit!\n");
+                    //printf("Writing dirty bit!\n");
                     // Set cache block dirty flag to true
                     cache_blocks[cache_block_idx].dirty = true;
                 }// Else dirty bit is false (read operation)
@@ -261,6 +278,14 @@ public:
     }
 };
 
+/**************************************************************************************************************
+    Function name:         display_ops(memOp ops[], int num_ops, int assoc_deg)
+    Input parameters:      memOp ops[]: The array of memory operations to be executed
+                           integer num_ops: The number of memory operations
+                           integer assoc_deg: The cache set association degree
+    Return value:          Void - Returns nothing
+    Purpose:               Displays the memory operations' information and result to the user
+**************************************************************************************************************/
 void display_ops(memOp ops[], int num_ops, int assoc_deg){
     // String variable to store each memory addresses potential cache memory blocks
     string cache_blocks;
@@ -282,41 +307,64 @@ void display_ops(memOp ops[], int num_ops, int assoc_deg){
         printf("%8d %20d %15d %17s %14s\n", ops[i].mem_address, ops[i].mem_block, ops[i].cache_set, cache_blocks.c_str(), ops[i].result.c_str());
     }
 }
-
+/**************************************************************************************************************
+Function name:         parse_tag(int mem_address, int num_address_lines, int num_tag_bits)
+Input parameters:      Integer mem_address: The main memory address as an integer
+                       Integer num_address_lines: The number of system address lines/bits
+                       Integer num_tag_bits: The number of tag bits in a main memory address
+Return value:          String tag_string: The tag string representation
+Purpose:               Creates and returns the string representation of the main memory address tag
+**************************************************************************************************************/
 string parse_tag(int mem_address, int num_address_lines, int num_tag_bits){
-    int bit_val;
-    string tag_string = "";
-    //cout << "\nmem block: " << mem_address << endl;
-    //cout << "Num shift: " << num_address_lines - num_tag_bits << endl;
-
+    string tag_string = ""; // Variable to store string representation of tag
+    // Shift the main memory address bits right by the number of
+    // offset and index bits
     mem_address = mem_address >> (num_address_lines - num_tag_bits);
-    //printf("Tag value: %d\n", mem_address & 0x3);
+    // Iterate through the tag bits of the main memory address
     for(int bit=1; bit <= num_tag_bits; bit++){
+        // If the current tag bit of interest (masked with 1)
+        // is 1
         if((mem_address & 0x1) == 1){
-            //printf("1 digit!");
-            tag_string.insert(0, "1");
-        }else{
+            tag_string.insert(0, "1"); // Add to "1" tag string
+        }else{ // Else if current tag bit is 0, add "0" to tag string
             tag_string.insert(0, "0");
         }
-        //printf("Bit: %d, value: %d\n", bit, mem_address & 0x3);
+        // Shift the main memory address bits right by 1 digit
         mem_address = mem_address >> 1;
     }
-    //printf("Tag string::: %s\n", tag_string.c_str());
-
+    // Return the tag string representation
     return tag_string;
 }
-
+/**************************************************************************************************************
+Function name:         display_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_bits)
+Input parameters:      cacheBlock cache_blocks[]: The array of cache blocks emulating cache memory
+                       Integer num_cache_blocks: The number of cache blocks in the system cache
+                       Integer num_tag_bits: The number of tag bits in a main memory address
+Return value:          void - Returns nothing
+Purpose:               Displays the status of the system cache
+**************************************************************************************************************/
 void display_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_bits){
-    string data_string;
+    string data_string; // Variable to store the string representation of the cache data
     cout << "\n\nFinal \"status\" of the cache:" << endl;
+    // Display cache table header
     cout << "Cache blk #\tdirty bit\tvalid bit\ttag\t\tData" << endl;
     cout << "------------------------------------------------------------------------------" << endl;
+    // Iterate through cache blocks in cache
     for(int i=0; i < num_cache_blocks; i++){
+        // Create string representation of cache data
         data_string = (cache_blocks[i].data < 0) ? "xxx" : "mm blk # " + to_string(cache_blocks[i].data);
+        // Display single cache block information
         printf("%7d %14d %15d %12s %16s\n", i, cache_blocks[i].dirty, cache_blocks[i].valid, cache_blocks[i].tag.c_str(), data_string.c_str());
     }
 }
-
+/**************************************************************************************************************
+Function name:         init_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_bits)
+Input parameters:      cacheBlock cache_blocks[]: The array of cache blocks emulating cache memory
+                       Integer num_cache_blocks: The number of cache blocks in the system cache
+                       Integer num_tag_bits: The number of tag bits in a main memory address
+Return value:          void - Returns nothing
+Purpose:               Initializes the system cache
+**************************************************************************************************************/
 void init_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_bits){
     // Iterate through the cache blocks
     for(int i=0; i < num_cache_blocks; i++){
@@ -329,7 +377,13 @@ void init_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_bit
         cache_blocks[i].data  = -1;
     }
 }
-
+/**************************************************************************************************************
+    Function name:         calc_hit_rates(memOp ops[], int num_ops)
+    Input parameters:      memOp ops[]: The array of memory operations to be executed
+                           integer num_ops: The number of memory operations
+    Return value:          Void - Returns nothing
+    Purpose:               Calculates and displays the memory operation optimum and actual hit rates
+**************************************************************************************************************/
 void calc_hit_rates(memOp ops[], int num_ops){
     int num_hits = 0; // Initialize the number of hits to 0
     // Create a set containing the main memory blocks yet operated on
@@ -363,6 +417,8 @@ void calc_hit_rates(memOp ops[], int num_ops){
 int main(int argc, char *argv[]) {
     // Character input to parse for continue operation status
     char cont_input;
+    // Dummy string for dumping file empty line to
+    string dummy_string;
     // Infinite operation loop
     while(1){
         // Create memory simulator to later populate with values
@@ -399,8 +455,7 @@ int main(int argc, char *argv[]) {
         input_stream >> num_mem_ops; // Get number of memory operations from file
         memOp operations[num_mem_ops]; // Create array of memory operations
         
-        string s; // Dummy string
-        getline(input_stream, s); // Ignore empty line in input file
+        getline(input_stream, dummy_string); // Ignore empty line in input file
 
         char op_char; // Variable to store temporary memory operation type
         int mem_loc; // Variable to store temporary memory address
