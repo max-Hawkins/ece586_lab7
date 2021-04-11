@@ -86,12 +86,12 @@ public:
 
     MemorySim(){} // Default constructor
 
-    /**************************************************************************************************************
+    /**********************************************************************************
     Function name:         calc_mem_addr_layout()
     Input parameters:      None
     Return value:          Void - Returns nothing
     Purpose:               Calculates and displays various memory simulator parameters necessary for operation
-    **************************************************************************************************************/
+    ***********************************************************************************
     void calc_mem_addr_layout(){
         cout << "\nSimulator Output:" << endl;
         // Calculate number of address, convert to integer, and print to screen
@@ -112,15 +112,17 @@ public:
         cout << "Total cache size required = " << size_total_cache << " bytes";
     }
 
-    /**************************************************************************************************************
-    Function name:         exec_ops(memOp ops[], int num_ops, cacheBlock cache_blocks[], int num_cache_blocks)
-    Input parameters:      memOp ops[]: The array of memory operations to be executed
-                           integer num_ops: The number of memory operations
-                           cacheBlock cache_blocks[]: The array of cache blocks emulating cache memory
-                           integer num_cache_blocks: The number of cache blocks in the system cache
-    Return value:          Void - Returns nothing
-    Purpose:               Runs the memory operations with the given cache memory and simulator parameters
-    **************************************************************************************************************/
+    /**********************************************************************************
+    Function name:    exec_ops(memOp ops[], int num_ops, cacheBlock cache_blocks[], int num_cache_blocks)
+    Input parameters: memOp ops[]: The array of memory operations to be executed
+                      integer num_ops: The number of memory operations
+                        cacheBlock cache_blocks[]: 
+                            The array of cache blocks emulating cache memory
+                      integer num_cache_blocks: 
+                            The number of cache blocks in the system cache
+    Return value:     Void - Returns nothing
+    Purpose:          Runs the memory operations with the given cache memory and simulator parameters
+    **********************************************************************************/
     void exec_ops(memOp ops[], int num_ops, cacheBlock cache_blocks[], int num_cache_blocks){
         bool tag_found; // Boolean flag of whether or not a tag match was found
         int cache_block_idx; // Variable to store the current cache block index to be searched
@@ -220,9 +222,8 @@ public:
                                 max_age_cache_offset = idx;
                             }
                         }
-                        //printf("LRU min age cache offset: %d,  age: %d", max_age_cache_offset, max_age);
-
-                        // Set cache block to overwrite to the cache block with index of mad age
+                        // Set cache block to overwrite to
+                        // the cache block with index of max age
                         cache_block_to_edit = ops[i].cache_block_start + max_age_cache_offset;
                     }
 
@@ -237,20 +238,24 @@ public:
                             for(int cache_block_offset=0; cache_block_offset < assoc_deg; cache_block_offset++){
                                 // Add cache set offset to global cache offset
                                 cache_block_idx = ops[i].cache_block_start + cache_block_offset;
-                                // If the cache set contains the historical main memory block operated on of interest
+                                // If the cache set contains the historical
+                                // main memory block operated on of interest
                                 if(cache_blocks[cache_block_idx].data == cur_search_main_block){
                                     cache_repl_block_found = true; // Set replace block found
-                                    cache_block_to_edit = cache_block_idx; // Set replace index to current index
+                                    // Set replace index to current index
+                                    cache_block_to_edit = cache_block_idx; 
                                     //printf("FIFO cache block found: %d", cache_block_idx);
                                     break; // Break out cache block search
                                 }
                             }
-                            // If a cache block to replace has been found, exit search for loop
+                            // If a cache block to replace has been found,
+                            // exit search for loop
                             if(cache_repl_block_found)
                                 break;
                         }
                     }
-                    // If invalid replacement policy - should NOT happen since in 487
+                    // If invalid replacement policy
+                    // should NOT happen since in 487
                     else{
                         printf("---Invalid replacement policy!---\n");
                     }
@@ -278,14 +283,14 @@ public:
     }
 };
 
-/**************************************************************************************************************
+/**************************************************************************************
     Function name:         display_ops(memOp ops[], int num_ops, int assoc_deg)
     Input parameters:      memOp ops[]: The array of memory operations to be executed
                            integer num_ops: The number of memory operations
                            integer assoc_deg: The cache set association degree
     Return value:          Void - Returns nothing
     Purpose:               Displays the memory operations' information and result to the user
-**************************************************************************************************************/
+**************************************************************************************/
 void display_ops(memOp ops[], int num_ops, int assoc_deg){
     // String variable to store each memory addresses potential cache memory blocks
     string cache_blocks;
@@ -307,14 +312,14 @@ void display_ops(memOp ops[], int num_ops, int assoc_deg){
         printf("%8d %20d %15d %17s %14s\n", ops[i].mem_address, ops[i].mem_block, ops[i].cache_set, cache_blocks.c_str(), ops[i].result.c_str());
     }
 }
-/**************************************************************************************************************
+/**************************************************************************************
 Function name:         parse_tag(int mem_address, int num_address_lines, int num_tag_bits)
 Input parameters:      Integer mem_address: The main memory address as an integer
                        Integer num_address_lines: The number of system address lines/bits
                        Integer num_tag_bits: The number of tag bits in a main memory address
 Return value:          String tag_string: The tag string representation
 Purpose:               Creates and returns the string representation of the main memory address tag
-**************************************************************************************************************/
+***************************************************************************************/
 string parse_tag(int mem_address, int num_address_lines, int num_tag_bits){
     string tag_string = ""; // Variable to store string representation of tag
     // Shift the main memory address bits right by the number of
@@ -335,14 +340,14 @@ string parse_tag(int mem_address, int num_address_lines, int num_tag_bits){
     // Return the tag string representation
     return tag_string;
 }
-/**************************************************************************************************************
+/**************************************************************************************
 Function name:         display_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_bits)
 Input parameters:      cacheBlock cache_blocks[]: The array of cache blocks emulating cache memory
                        Integer num_cache_blocks: The number of cache blocks in the system cache
                        Integer num_tag_bits: The number of tag bits in a main memory address
 Return value:          void - Returns nothing
 Purpose:               Displays the status of the system cache
-**************************************************************************************************************/
+***************************************************************************************/
 void display_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_bits){
     string data_string; // Variable to store the string representation of the cache data
     cout << "\n\nFinal \"status\" of the cache:" << endl;
@@ -357,14 +362,14 @@ void display_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_
         printf("%7d %14d %15d %12s %16s\n", i, cache_blocks[i].dirty, cache_blocks[i].valid, cache_blocks[i].tag.c_str(), data_string.c_str());
     }
 }
-/**************************************************************************************************************
+/**************************************************************************************
 Function name:         init_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_bits)
 Input parameters:      cacheBlock cache_blocks[]: The array of cache blocks emulating cache memory
                        Integer num_cache_blocks: The number of cache blocks in the system cache
                        Integer num_tag_bits: The number of tag bits in a main memory address
 Return value:          void - Returns nothing
 Purpose:               Initializes the system cache
-**************************************************************************************************************/
+**************************************************************************************/
 void init_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_bits){
     // Iterate through the cache blocks
     for(int i=0; i < num_cache_blocks; i++){
@@ -377,13 +382,13 @@ void init_cache(cacheBlock cache_blocks[], int num_cache_blocks, int num_tag_bit
         cache_blocks[i].data  = -1;
     }
 }
-/**************************************************************************************************************
+/**************************************************************************************
     Function name:         calc_hit_rates(memOp ops[], int num_ops)
     Input parameters:      memOp ops[]: The array of memory operations to be executed
                            integer num_ops: The number of memory operations
     Return value:          Void - Returns nothing
     Purpose:               Calculates and displays the memory operation optimum and actual hit rates
-**************************************************************************************************************/
+**************************************************************************************/
 void calc_hit_rates(memOp ops[], int num_ops){
     int num_hits = 0; // Initialize the number of hits to 0
     // Create a set containing the main memory blocks yet operated on
